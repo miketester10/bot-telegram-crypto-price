@@ -5,12 +5,16 @@ import { createCanvas } from "canvas";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
+import { ApiError } from "telegraf/typings/core/types/typegram";
 dotenv.config();
 
 const TOKEN = <string>process.env.BOT_TOKEN;
 const bot: Telegraf = new Telegraf(TOKEN);
 
-const generateImage = async (symbol: string, price: string) => {
+const generateImage = async (
+  symbol: string,
+  price: string
+): Promise<Buffer> => {
   const canvas = createCanvas(800, 400);
   const ctx = canvas.getContext("2d");
 
@@ -37,7 +41,8 @@ bot.start(async (ctx: Context) => {
   // await ctx.reply(
   //   `Benvenuto ${name} ${userId}. Inserisci il ticker della crypto es. BTC, ETH..`
   // );
-  await ctx.reply(`
+  await ctx.reply(
+    `
     Hey ${name} ${userId}. Nice to meet you!
     
     Get your first crypto price update.
@@ -46,7 +51,9 @@ bot.start(async (ctx: Context) => {
 
     Format: /p <ticker> 
     
-    Awesome! 🚀`, {parse_mode: "Markdown"});
+    Awesome! 🚀`,
+    { parse_mode: "Markdown" }
+  );
 });
 
 // bot.on("message", async (ctx: Context) => {
@@ -92,10 +99,10 @@ bot.start(async (ctx: Context) => {
 // });
 
 bot.command("p", async (ctx: Context) => {
-  // Gestisci il comando checkprice qui
   const message = ctx.text;
   const ticker = message?.split(" ")[1]?.toUpperCase();
   console.log(ticker);
+
   if (ticker) {
     try {
       const response: AxiosResponse<APIResponse> = await axios.get(
@@ -106,9 +113,7 @@ bot.command("p", async (ctx: Context) => {
       const filePath = path.resolve(__dirname, "crypto.png");
       console.log(filePath);
       fs.writeFileSync(filePath, buffer);
-      //   await ctx.reply(`Il prezzo di [${ticker}](https://it.tradingview.com/symbols/${ticker}USD/) è ${price} $`);
       await ctx.replyWithPhoto(
-        // { source: path.resolve(__dirname, `./stock.png`) },
         { source: filePath },
         {
           // caption: `Il prezzo di [${ticker}](https://it.tradingview.com/symbols/${ticker}USD/) è ${price} $`,
@@ -130,20 +135,28 @@ bot.command("p", async (ctx: Context) => {
         }
       );
     } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        const nameError = (<APIResponseError>err.response?.data).errore;
-        console.log(nameError);
-        await ctx.reply(`Crypto *[${ticker}]* non trovata. Riprova.`, {
-          parse_mode: "Markdown",
-        });
-        return;
-      }
-      ctx.reply("Si è verificato un errore. Riprova.");
+      handleError(err, ctx, ticker);
     }
-  } else {
-    // await ctx.reply(
-    //   "Ticker non valido. Digitare: /p <ticker> ====> ES. /p BTC);"
   }
 });
+
+const handleError = async (err: unknown, ctx: Context, ticker?: string) => {
+  if (axios.isAxiosError(err)) {
+    const error = <APIResponseError>err;
+    const errorName = error.response?.data.errore;
+    if (errorName === "Ticker non trovato in nessuna API") {
+      await ctx.reply(`Crypto *[${ticker}]* non trovata. Riprova.`, {
+        parse_mode: "Markdown",
+      });
+    } else {
+      await ctx.reply("Si è verificato un errore con il server. Riprova.");
+    }
+    return;
+  }
+
+  const errorType = <Error>err;
+  console.log(errorType.message);
+  ctx.reply("Si è verificato un errore. Riprova.");
+};
 
 bot.launch();
