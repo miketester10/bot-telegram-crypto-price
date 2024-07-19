@@ -154,8 +154,8 @@ const handleError = async (err: unknown, ctx: Context, ticker?: string) => {
     return;
   }
 
-  const errorType = <Error>err;
-  console.log(errorType.message);
+  const error = <Error>err;
+  console.log(error.message);
   ctx.reply("Si è verificato un errore. Riprova.");
 };
 
